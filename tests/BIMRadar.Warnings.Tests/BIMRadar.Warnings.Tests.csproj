@@ -6,9 +6,18 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
-  <!-- Pure logic files from src are linked in here later (no Revit reference). -->
+  <!-- Pure logic files from src are linked in here (no Revit reference). -->
+  <ItemGroup>
+    <Compile Include="..\..\src\BIMRadar.Warnings\Rwis\Pure\*.cs" Link="Pure\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- The RWIS master tables (public, approved by the owner) are used as the classification fixture. -->
+  <ItemGroup>
+    <None Include="..\..\data\RWIS_Template.xlsx" Link="RWIS_Template.xlsx" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />

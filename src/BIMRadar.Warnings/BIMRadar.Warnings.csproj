@@ -35,6 +35,8 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\*.png" />
+    <!-- RWIS master tables (classes, taxonomy, severity, rules, fix guide); read by RwisEngine -->
+    <EmbeddedResource Include="..\..\data\RWIS_Template.xlsx" LogicalName="BIMRadar.Warnings.RWIS_Template.xlsx" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
