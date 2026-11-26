@@ -1,0 +1,100 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Unit tests (no Revit)
+        run: dotnet test tests/BIMRadar.Warnings.Tests/BIMRadar.Warnings.Tests.csproj -c Release
+
+      - name: Build Revit 2022 (net48)
+        run: dotnet build src/BIMRadar.Warnings/BIMRadar.Warnings.csproj -c Release -p:RevitVersion=2022
+
+      - name: Build Revit 2025 (net8.0-windows)
+        run: dotnet build src/BIMRadar.Warnings/BIMRadar.Warnings.csproj -c Release -p:RevitVersion=2025
+
+      - name: Build Revit 2027 (net10.0-windows)
+        run: dotnet build src/BIMRadar.Warnings/BIMRadar.Warnings.csproj -c Release -p:RevitVersion=2027
+
+      - name: Pack zips
+        run: pwsh -File tools/pack.ps1
+
+      # upload-artifact zips what it uploads, so upload the unzipped folders
+      # (the .zip files in dist/ are for the GitHub Release).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BIMRadar-Warnings-pyRevit
+          path: dist/pyRevit
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BIMRadar-Warnings-Standalone
+          path: dist/Standalone
+
+      - name: Publish unzipped build to test-build branch
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/test-build"
+          if [ "$GITHUB_REF_NAME" = "main" ]; then TB=test-build; else TB=test-build-$GITHUB_REF_NAME; fi
+          rm -rf "$OUT"
+          mkdir -p "$OUT/pyRevit"
+          cp -r dist/pyRevit/BIMRadar-Warnings.extension "$OUT/pyRevit/BIMRadar-Warnings.extension"
+          cp -r dist/Standalone "$OUT/Standalone"
+          {
+            echo "Commit: $GITHUB_SHA"
+            echo "Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > "$OUT/BUILD.txt"
+          cd "$OUT"
+          # Fresh repo with no .gitignore, so bin/ folders (and DLLs) are kept.
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898799+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$TB"
+          git add -A
+          git commit -m "Test build ${GITHUB_SHA::7}"
+          git push --force https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git "$TB"
+
+      - name: Release notes from CHANGELOG
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          # Section whose heading starts with "## <tag>" (up to the next "## ").
+          awk -v tag="## $TAG" 'index($0, tag) == 1 && (length($0) == length(tag) || substr($0, length(tag) + 1, 1) == " ") {f=1; next} /^## / {f=0} f' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "Release $TAG. See docs/INSTALL.md for install steps." > "$RUNNER_TEMP/notes.md"
+          fi
+          {
+            echo
+            echo "Install: https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/INSTALL.md"
+          } >> "$RUNNER_TEMP/notes.md"
+
+      - name: Attach zips to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false   # owner publishes the release himself; the build only adds the zips to it
+          files: dist/*.zip
+          body_path: ${{ runner.temp }}/notes.md
