@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Application">
+    <Name>BIMRadar Warnings Manager</Name>
+    <Assembly>BIMRadar.Warnings\BIMRadar.Warnings.dll</Assembly>
+    <FullClassName>BIMRadar.Warnings.Standalone.App</FullClassName>
+    <AddInId>feea0523-1958-4af7-94e5-f5fe9ba86f3e</AddInId>
+    <VendorId>BIMRadar</VendorId>
+    <VendorDescription>BIMRadar - github.com/loaiwaleed-hue/Warnings-Viewer-and-solver</VendorDescription>
+  </AddIn>
+</RevitAddIns>

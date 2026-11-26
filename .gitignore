@@ -1,0 +1,11 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+dist/
+*.zip
+.DS_Store
+~$*.xlsx
+# never commit project/client data
+samples-private/

@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <RevitVersion Condition="'$(RevitVersion)' == ''">2025</RevitVersion>
+    <!-- Separate obj/ per Revit year so restore assets of different target frameworks never mix. -->
+    <BaseIntermediateOutputPath>obj\$(RevitVersion)\</BaseIntermediateOutputPath>
+    <!-- The SDK only excludes the CURRENT obj/bin from globbing; exclude all years' folders. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj\**;bin\**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

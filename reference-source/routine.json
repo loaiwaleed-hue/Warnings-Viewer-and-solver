@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "id": "isolate-warnings-rwis-v7",
+  "name": "RWIS Warning Manager v7",
+  "description": "Groups the model's warnings by type and classifies them with the RWIS tables. 1 Review: one 3D view per warning type, coloured by severity, with elements that would be deleted in MAGENTA (no changes). 2 Solve the type in the active WRN view. 3 Step through each type. 4 Solve ALL. Before any 3D element (wall, floor, family...) is deleted it is highlighted magenta, selected and zoomed to, with the kept element in green, and you choose Delete / Keep / Delete all. Room-boundary fixes that cannot move or break a room (redundant separation lines, tiny off-axis separation lines) are applied without asking. Every run updates Desktop\\RWIS Reports\\<model>_RWIS_Warnings_Report.xlsx: all warnings sorted by criticality with status, what AICon changed, risk and fixes; rows where AICon deleted an element are RED with the deleted IDs. One Ctrl+Z undoes a run.",
+  "kind": "script",
+  "ribbon": {
+    "panel": "Routines",
+    "buttonText": "RWIS\nWarnings"
+  },
+  "inputs": [
+    {
+      "name": "action",
+      "label": "What to do",
+      "type": "enum",
+      "options": [
+        "1. Review - 3D view per warning type (no changes)",
+        "2. Solve the warning type in the active WRN 3D view",
+        "3. Solve - step through each warning type (confirm each)",
+        "4. Solve ALL warnings at once (hurry mode)"
+      ],
+      "required": false
+    },
+    {
+      "name": "severities",
+      "label": "Severities to solve / review",
+      "type": "enum",
+      "options": [
+        "All severities",
+        "CRITICAL only",
+        "HIGH only",
+        "MEDIUM only",
+        "LOW only",
+        "CRITICAL + HIGH",
+        "MEDIUM + LOW"
+      ],
+      "required": false
+    },
+    {
+      "name": "unpinToFix",
+      "label": "Unpin to fix (pinned elements: unpin -> fix -> re-pin)",
+      "type": "boolean",
+      "required": false
+    },
+    {
+      "name": "contains",
+      "label": "Only warnings containing (text, class ID or T-code - optional)",
+      "type": "string",
+      "required": false
+    },
+    {
+      "name": "skipConfirmation",
+      "label": "Don't ask before fixing (not recommended)",
+      "type": "boolean",
+      "required": false
+    },
+    {
+      "name": "skip3DViews",
+      "label": "Don't create WRN 3D views",
+      "type": "boolean",
+      "required": false
+    },
+    {
+      "name": "skipReport",
+      "label": "Don't update the Excel report",
+      "type": "boolean",
+      "required": false
+    }
+  ],
+  "readOnly": false,
+  "destructive": true,
+  "script": {
+    "files": [
+      "Routine.cs"
+    ]
+  }
+}
