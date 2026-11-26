@@ -13,11 +13,9 @@ namespace BIMRadar.Warnings
         /// <summary>Warnings button: opens the Warnings window.</summary>
         public static void Open(UIApplication uiapp)
         {
-            // T4 fills this in (modeless Warnings window).
             Guard("Warnings", delegate
             {
-                TaskDialog.Show(DialogTitle, "Warnings window comes in the next build.\n\nRevit " + uiapp.Application.VersionNumber
-                    + " (" + Compat.RuntimeDescription + ")");
+                Manager.WarningsWindow.Open(uiapp);
             });
         }
 

@@ -9,6 +9,9 @@ namespace BIMRadar.Warnings.Rwis.Pure
         /// <summary>Most to least severe.</summary>
         public static readonly string[] Order = { "CRITICAL", "HIGH", "MEDIUM", "LOW" };
 
+        /// <summary>The choices of the Warnings window severity filter; every text is understood by Parse.</summary>
+        public static readonly string[] Choices = { "All", "CRITICAL", "HIGH", "MEDIUM", "LOW", "CRITICAL + HIGH", "MEDIUM + LOW" };
+
         /// <summary>CRITICAL 4, HIGH 3, MEDIUM 2, anything else 1 (as v7).</summary>
         public static int Rank(string s)
         {

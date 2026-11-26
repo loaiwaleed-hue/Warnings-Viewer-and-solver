@@ -37,6 +37,42 @@ namespace BIMRadar.Warnings.Rwis
             return s != null && s.StartsWith("RWIS|");
         }
 
+        /// <summary>The WRN 3D view of one warning type (Description = "RWIS|" + warning text, as v7 keyOf), or null.</summary>
+        public static View3D FindWrnView(Document doc, string key)
+        {
+            if (doc == null || key == null) return null;
+            foreach (View3D v in new FilteredElementCollector(doc).OfClass(typeof(View3D)).Cast<View3D>())
+            {
+                if (v.IsTemplate) continue;
+                Parameter p = v.get_Parameter(BuiltInParameter.VIEW_DESCRIPTION); string s = p != null ? p.AsString() : null;
+                if (s != null && s.StartsWith("RWIS|") && s.Substring(5) == key) return v;
+            }
+            return null;
+        }
+
+        /// <summary>Full path of the Excel report of a model (same folder and name rule as the LOAD section of Run): Desktop\RWIS Reports\&lt;model&gt;_RWIS_Warnings_Report.xlsx.</summary>
+        public static string ReportPathFor(string docTitle)
+        {
+            string dir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "RWIS Reports");
+            string safe = new string((docTitle ?? "").Select(ch => System.IO.Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch).ToArray());
+            return System.IO.Path.Combine(dir, safe + "_RWIS_Warnings_Report.xlsx");
+        }
+
+        /// <summary>
+        /// Read-only scan for the Warnings window: runs the collection, classification and planned-fix (preview) code of Run and stops before
+        /// any transaction, view or report. All severities, no text filter. One entry per warning type in the v7 severity order.
+        /// </summary>
+        public static List<RwisGroupInfo> Scan(UIApplication uiapp)
+        {
+            var o = new RwisOptions();
+            o.Action = 1;
+            o.ScanOnly = true;
+            o.Skip3DViews = true;
+            o.SkipReport = true;
+            Run(uiapp, o);
+            return o.ScanResult ?? new List<RwisGroupInfo>();
+        }
+
         /// <summary>Runs the v7 routine for the options and returns the summary text (scalar lines, then TypesMarker and one line per warning type).</summary>
         public static string Run(UIApplication uiapp, RwisOptions opts)
         {
@@ -52,6 +88,7 @@ bool allowPinned = opts.UnpinToFix;
 bool skipConfirm = opts.SkipConfirmation;
 bool skipViews = opts.Skip3DViews || opts.ReportOnly;
 string filter = (opts.Contains ?? "").Trim();
+string rwOnlyKey = string.IsNullOrEmpty(opts.GroupKey) ? null : opts.GroupKey;   // T4: one warning type (null = v7 behaviour)
 bool skipReport = opts.SkipReport;
 
 string[] ACTION_NAMES = { "", "Review - 3D view per warning type (no changes)", "Solve warning type of the active WRN 3D view", "Solve - step through each warning type", "Solve ALL warnings at once" };
@@ -493,8 +530,7 @@ for (int ri = 0; ri < recText.Count; ri++) {
     string text = recText[ri]; string d = RwisText.Normalize(text);
     string[] c = recCls[ri];
     if (!sevAllowed.Contains(c[3])) continue;
-    if (filter.Length > 0 && d.IndexOf(filter.ToLowerInvariant()) < 0 && c[1].IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0 &&
-        !string.Equals(c[2], filter, StringComparison.OrdinalIgnoreCase) && !string.Equals(c[3], filter, StringComparison.OrdinalIgnoreCase) && !string.Equals(c[0], filter, StringComparison.OrdinalIgnoreCase)) continue;
+    if (!RwisFilter.Matches(d, c[1], c[2], c[3], c[0], filter)) continue;   // v7 filter test, moved to Pure/RwisWindowLogic.cs (same conditions)
     infos.Add(new string[] { text, d, c[1], c[2], c[3], c[4], c[5], c[0], recHash[ri], ri.ToString() });
     infoIds.Add(recIds[ri]);
 }
@@ -601,6 +637,31 @@ Func<string, string> groupDetails = key => {
     return sb.ToString();
 };
 
+// ================= SCAN ONLY (T4, Warnings window): list of warning types, nothing is changed =================
+if (opts.ScanOnly) {
+    var rwList = new List<RwisGroupInfo>();
+    var rwFg = WB["TBL_Fix_Guide"].Skip(1).Where(rwR => C(rwR, 1).Length > 0).ToList();
+    foreach (string rwK in groupKeys) {
+        var rwItems = groupItems[rwK]; string[] rwF = infos[rwItems[0]];
+        // fix text: class level (TBL_Fix_Guide by class ID), taxonomy level as fallback - the same lookup as the report columns
+        string[] rwFgc = rwF[7].Length > 0 ? rwFg.FirstOrDefault(rwR => C(rwR, 1) == rwF[7]) : null;
+        string[] rwT = rwFgc != null ? new string[] { C(rwFgc, 2), C(rwFgc, 3), C(rwFgc, 4), C(rwFgc, 5), C(rwFgc, 6) }
+            : (TAX.ContainsKey(rwF[3]) ? TAX[rwF[3]] : new string[] { "", "", "Review manually", "", "" });
+        var rwG = new RwisGroupInfo();
+        rwG.Key = rwK; rwG.Number = groupKeys.IndexOf(rwK) + 1; rwG.Severity = rwF[4]; rwG.Count = rwItems.Count;
+        rwG.AutoFixable = rwItems.Count(rwI => actionable(plans[rwI]));
+        rwG.ClassId = rwF[7]; rwG.ClassName = rwF[2]; rwG.Taxonomy = rwF[3];
+        rwG.PlannedFix = plans[rwG.AutoFixable > 0 ? rwItems.First(rwI => actionable(plans[rwI])) : rwItems[0]].Split(';')[0];   // the text of the v7 summary line
+        rwG.PlanDetails = groupDetails(rwK);
+        rwG.Meaning = rwT[0]; rwG.Causes = rwT[1]; rwG.Fix = rwT[2]; rwG.Alternative = rwT[3];
+        rwG.Risk = rwT[4] + (rwF[5].Length > 0 && !rwF[5].StartsWith("Not in") ? " - " + rwF[5] : "");
+        rwG.ElementIds = rwItems.SelectMany(rwI => infoIds[rwI]).Distinct().Select(rwId => Compat.IdValue(rwId)).ToList();
+        rwList.Add(rwG);
+    }
+    opts.ScanResult = rwList;
+    return "Scan: " + rwList.Count + " warning types, " + infos.Count + " warnings";
+}
+
 var groupStatus = new Dictionary<string, string>();
 Action<string> solveGroup = key => {
     preview = false;
@@ -620,21 +681,22 @@ Action<string> solveGroup = key => {
 string stopNote = "";
 // One named transaction per run = one Ctrl+Z (AICon wrapped the v7 script in one). ReportOnly changes nothing in the model.
 Transaction rwTx = null;
-if (!opts.ReportOnly) { rwTx = new Transaction(doc, "RWIS Warnings - " + ACTION_NAMES[action]); rwTx.Start(); }
+if (!opts.ReportOnly) { rwTx = new Transaction(doc, "RWIS Warnings - " + (rwOnlyKey != null && action == 1 ? "Open 3D view of one warning type" : ACTION_NAMES[action])); rwTx.Start(); }
 try {
 if (action == 1) {
-    foreach (string k in groupKeys) { makeView(k, false); groupStatus[k] = "REVIEW"; }
-    // views of warnings that no longer exist -> mark DONE
-    if (!opts.ReportOnly)
+    if (rwOnlyKey != null && !groupItems.ContainsKey(rwOnlyKey)) stopNote = "This warning type no longer exists in the model.";
+    foreach (string k in groupKeys) { if (rwOnlyKey != null && k != rwOnlyKey) continue; makeView(k, false); groupStatus[k] = "REVIEW"; }
+    // views of warnings that no longer exist -> mark DONE (not when only one type is opened from the Warnings window)
+    if (!opts.ReportOnly && rwOnlyKey == null)
     foreach (View3D v in allViews.OfType<View3D>().ToList()) {
         string k = keyOf(v);
         if (k != null && !groupItems.ContainsKey(k) && !v.Name.Contains(" - DONE - ")) setName(v, clean("WRN -- - DONE - " + trunc(k, 80)));
     }
 }
 else if (action == 2) {
-    string k = keyOf(doc.ActiveView);
+    string k = rwOnlyKey != null ? rwOnlyKey : keyOf(doc.ActiveView);   // T4: the Warnings window names the type
     if (k == null) stopNote = "The active view is not a WRN review view. Run 'Review Warnings' first, open one of the 'WRN ..' 3D views, then run 'Solve This View' again.";
-    else if (!groupItems.ContainsKey(k)) { stopNote = "This warning type no longer exists in the model - nothing to fix."; setName(doc.ActiveView, clean("WRN -- - DONE - " + trunc(k, 80))); }
+    else if (!groupItems.ContainsKey(k)) { stopNote = "This warning type no longer exists in the model - nothing to fix."; View rwGone = rwOnlyKey == null ? doc.ActiveView : (View)allViews.OfType<View3D>().FirstOrDefault(x => !x.IsTemplate && keyOf(x) == k); if (rwGone != null) setName(rwGone, clean("WRN -- - DONE - " + trunc(k, 80))); }
     else {
         bool go = true;
         if (!skipConfirm && !groupAuto(k)) {
@@ -680,7 +742,7 @@ else if (action == 3) {
 else if (action == 4) {
     int nAct = plans.Count(actionable);
     bool go = true;
-    if (!skipConfirm && nAct > 0) {
+    if (!skipConfirm && !opts.SolveAllConfirmed && nAct > 0) {
         var td = new TaskDialog("RWIS - solve ALL");
         td.MainInstruction = string.Format("Fix {0} warnings across {1} warning types now?", nAct, groupKeys.Count(k => groupItems[k].Any(i => actionable(plans[i]))));
         td.MainContent = "Every change is logged in the RWIS Warnings Report (Desktop\\RWIS Reports) and shown in green in a 'WRN .. DONE' 3D view per type. One Ctrl+Z undoes everything.";
