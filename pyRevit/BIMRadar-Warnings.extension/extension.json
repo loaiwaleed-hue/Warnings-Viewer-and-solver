@@ -1,0 +1,7 @@
+{
+  "name": "BIMRadar-Warnings",
+  "description": "BIMRadar Warnings Manager: review and solve Revit warnings by type.",
+  "author": "Loay Ahmed",
+  "type": "extension",
+  "url": "https://github.com/loaiwaleed-hue/Warnings-Viewer-and-solver"
+}
