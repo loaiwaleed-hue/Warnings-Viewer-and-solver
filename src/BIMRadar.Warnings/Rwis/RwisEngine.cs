@@ -369,7 +369,7 @@ Func<List<Element>, string> fixTag = els => {
     var log = new List<string>();
     foreach (Element e in els) {
         SpatialElement host = null;
-        if (e is RoomTag) host = ((RoomTag)e).Room;
+        if (e is Autodesk.Revit.DB.Architecture.RoomTag) host = ((Autodesk.Revit.DB.Architecture.RoomTag)e).Room;
         else if (e is Autodesk.Revit.DB.Mechanical.SpaceTag) host = ((Autodesk.Revit.DB.Mechanical.SpaceTag)e).Space;
         if (host == null) continue;
         LocationPoint hp = host.Location as LocationPoint, tp = e.Location as LocationPoint;
